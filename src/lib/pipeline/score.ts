@@ -1,4 +1,4 @@
-import { generateJson, GEMINI_MODEL_VERSION, SchemaType } from "@/lib/gemini";
+import { generateJson, GEMINI_MODEL_VERSION, SCORING_MODEL, SchemaType } from "@/lib/gemini";
 
 export interface CriterionScore {
   score: number;
@@ -79,6 +79,7 @@ export async function scoreCandidate(params: {
     systemInstruction: buildSystemInstruction(params.rubricText),
     prompt: `TARGET ROLE: ${params.roleLabel}\n\nJOB DESCRIPTION (use this ONLY for criterion (f) role-scope fit; criteria (a)-(e) are evaluated identically regardless of role):\n${params.jdText}\n\n---\n\nCANDIDATE CV:\n${params.cleanText}`,
     schema,
+    model: SCORING_MODEL,
   });
 
   // Clamp each criterion to its documented max — the model is instructed not to

@@ -1,6 +1,12 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
-const MODEL_NAME = "gemini-2.5-pro";
+// Scoring is the one step where reasoning quality matters most (it implements
+// Rubric.txt directly), so it gets the pro model. Extraction/classification/
+// drafting are simpler structured tasks and run much faster on flash — with
+// ~70 candidates to process, the pro model's latency on every step would make
+// a full run impractically slow.
+export const SCORING_MODEL = "gemini-3.1-pro-preview";
+export const FAST_MODEL = "gemini-3.1-flash-lite-preview";
 
 function client() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -9,7 +15,7 @@ function client() {
 }
 
 export { SchemaType };
-export const GEMINI_MODEL_VERSION = MODEL_NAME;
+export const GEMINI_MODEL_VERSION = SCORING_MODEL;
 
 /**
  * Calls Gemini with a strict JSON response schema and returns the parsed object.
@@ -20,9 +26,10 @@ export async function generateJson<T>(params: {
   systemInstruction: string;
   prompt: string;
   schema: object;
+  model?: string;
 }): Promise<T> {
   const model = client().getGenerativeModel({
-    model: MODEL_NAME,
+    model: params.model ?? FAST_MODEL,
     systemInstruction: params.systemInstruction,
     generationConfig: {
       responseMimeType: "application/json",

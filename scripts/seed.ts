@@ -10,7 +10,9 @@
  *
  * Run with: npx tsx scripts/seed.ts
  */
-import "dotenv/config";
+import { config } from "dotenv";
+config({ path: ".env.local" });
+
 import { readFileSync, readdirSync } from "fs";
 import path from "path";
 import { eq } from "drizzle-orm";
