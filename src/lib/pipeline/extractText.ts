@@ -31,6 +31,5 @@ export async function extractText(file: Buffer, filename: string): Promise<strin
  * whitespace before this ever reaches normalize() or the database.
  */
 function sanitize(text: string): string {
-  // eslint-disable-next-line no-control-regex
   return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
 }
