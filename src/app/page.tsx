@@ -1,19 +1,9 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { db } from "@/lib/db/client";
+import { candidates, scores } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
-type CandidateRow = {
-  id: string;
-  name: string | null;
-  role_target: string;
-  status: string;
-  is_duplicate_of: string | null;
-  source_filename: string;
-  scores: {
-    total: number;
-    band: "advance" | "hold" | "decline";
-    gate_triggered: boolean;
-  }[];
-};
+export const dynamic = "force-dynamic";
 
 const BAND_ORDER: Record<string, number> = { advance: 0, hold: 1, decline: 2 };
 const BAND_STYLES: Record<string, string> = {
@@ -23,20 +13,28 @@ const BAND_STYLES: Record<string, string> = {
 };
 
 export default async function DashboardPage() {
-  const supabase = await createClient();
-  const { data: candidates } = await supabase
-    .from("candidates")
-    .select("id, name, role_target, status, is_duplicate_of, source_filename, scores(total, band, gate_triggered)")
-    .returns<CandidateRow[]>();
+  const rows = await db
+    .select({
+      id: candidates.id,
+      name: candidates.name,
+      roleTarget: candidates.roleTarget,
+      isDuplicateOf: candidates.isDuplicateOf,
+      sourceFilename: candidates.sourceFilename,
+      total: scores.total,
+      band: scores.band,
+      gateTriggered: scores.gateTriggered,
+    })
+    .from(candidates)
+    .leftJoin(scores, eq(scores.candidateId, candidates.id));
 
-  const scored = (candidates ?? [])
-    .filter((c) => c.scores.length > 0)
+  const scored = rows
+    .filter((r) => r.band !== null)
     .sort((a, b) => {
-      const bandDiff = BAND_ORDER[a.scores[0].band] - BAND_ORDER[b.scores[0].band];
+      const bandDiff = BAND_ORDER[a.band!] - BAND_ORDER[b.band!];
       if (bandDiff !== 0) return bandDiff;
-      return b.scores[0].total - a.scores[0].total;
+      return (b.total ?? 0) - (a.total ?? 0);
     });
-  const pending = (candidates ?? []).filter((c) => c.scores.length === 0);
+  const pending = rows.filter((r) => r.band === null);
 
   return (
     <div className="space-y-6">
@@ -55,38 +53,35 @@ export default async function DashboardPage() {
       </div>
 
       <div className="space-y-3">
-        {scored.map((c) => {
-          const score = c.scores[0];
-          return (
-            <Link
-              key={c.id}
-              href={`/candidates/${c.id}`}
-              className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-400"
-            >
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-slate-900">{c.name ?? c.source_filename}</span>
-                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{c.role_target}</span>
-                  {c.is_duplicate_of && (
-                    <span className="rounded bg-rose-100 px-1.5 py-0.5 text-xs text-rose-700">duplicate</span>
-                  )}
-                </div>
-                <div className="text-xs text-slate-500">{c.source_filename}</div>
-              </div>
-              <div className="flex items-center gap-3">
-                {score.gate_triggered && (
-                  <span className="text-xs text-slate-500" title="Gated: (a)+(b) < 15/45">
-                    gated
-                  </span>
+        {scored.map((c) => (
+          <Link
+            key={c.id}
+            href={`/candidates/${c.id}`}
+            className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-400"
+          >
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-slate-900">{c.name ?? c.sourceFilename}</span>
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{c.roleTarget}</span>
+                {c.isDuplicateOf && (
+                  <span className="rounded bg-rose-100 px-1.5 py-0.5 text-xs text-rose-700">duplicate</span>
                 )}
-                <span className="text-sm font-semibold text-slate-900">{score.total}/100</span>
-                <span className={`rounded px-2 py-1 text-xs font-medium capitalize ${BAND_STYLES[score.band]}`}>
-                  {score.band}
-                </span>
               </div>
-            </Link>
-          );
-        })}
+              <div className="text-xs text-slate-500">{c.sourceFilename}</div>
+            </div>
+            <div className="flex items-center gap-3">
+              {c.gateTriggered && (
+                <span className="text-xs text-slate-500" title="Gated: (a)+(b) < 15/45">
+                  gated
+                </span>
+              )}
+              <span className="text-sm font-semibold text-slate-900">{c.total}/100</span>
+              <span className={`rounded px-2 py-1 text-xs font-medium capitalize ${BAND_STYLES[c.band!]}`}>
+                {c.band}
+              </span>
+            </div>
+          </Link>
+        ))}
       </div>
 
       {pending.length > 0 && (
@@ -99,7 +94,7 @@ export default async function DashboardPage() {
                 href={`/candidates/${c.id}`}
                 className="block rounded-lg border border-dashed border-slate-300 bg-white p-3 text-sm text-slate-600 hover:border-slate-400"
               >
-                {c.name ?? c.source_filename} — {c.role_target}
+                {c.name ?? c.sourceFilename} — {c.roleTarget}
               </Link>
             ))}
           </div>

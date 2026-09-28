@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { and, eq } from "drizzle-orm";
 import { Resend } from "resend";
-import { createClient } from "@/lib/supabase/server";
+import { getSession } from "@/lib/auth";
+import { db } from "@/lib/db/client";
+import { candidates, emailDrafts } from "@/lib/db/schema";
 
 /**
  * POST /api/candidates/[id]/send-email — the ONLY call site of Resend's send
@@ -10,11 +13,8 @@ import { createClient } from "@/lib/supabase/server";
  * hard constraint: nothing sends until a human acts on that specific candidate.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
   const body = await req.json();
@@ -26,11 +26,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     );
   }
 
-  const [{ data: draft, error: draftErr }, { data: candidate, error: candErr }] = await Promise.all([
-    supabase.from("email_drafts").select("*").eq("id", body.draftId).eq("candidate_id", id).single(),
-    supabase.from("candidates").select("email, name").eq("id", id).single(),
-  ]);
-  if (draftErr || candErr) {
+  const [draft] = await db.select().from(emailDrafts).where(and(eq(emailDrafts.id, body.draftId), eq(emailDrafts.candidateId, id)));
+  const [candidate] = await db.select({ email: candidates.email, name: candidates.name }).from(candidates).where(eq(candidates.id, id));
+  if (!draft || !candidate) {
     return NextResponse.json({ error: "Draft or candidate not found" }, { status: 404 });
   }
   if (draft.status === "sent") {
@@ -51,13 +49,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: sendErr.message }, { status: 502 });
   }
 
-  const { error: updateErr } = await supabase
-    .from("email_drafts")
-    .update({ status: "sent", sent_at: new Date().toISOString(), resend_message_id: sent?.id ?? null })
-    .eq("id", draft.id);
-  if (updateErr) {
-    return NextResponse.json({ error: updateErr.message }, { status: 500 });
-  }
+  await db
+    .update(emailDrafts)
+    .set({ status: "sent", sentAt: new Date(), resendMessageId: sent?.id ?? null })
+    .where(eq(emailDrafts.id, draft.id));
 
   return NextResponse.json({ sent: true, resend_message_id: sent?.id ?? null });
 }

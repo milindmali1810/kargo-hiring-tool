@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/browser";
 
 const LINKS = [
   { href: "/", label: "Shortlist" },
@@ -13,10 +12,9 @@ const LINKS = [
 export function NavBar() {
   const pathname = usePathname();
   const router = useRouter();
-  const supabase = createClient();
 
   async function signOut() {
-    await supabase.auth.signOut();
+    await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
   }

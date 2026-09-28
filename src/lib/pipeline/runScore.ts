@@ -1,76 +1,91 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { candidates, scores, appConfig } from "@/lib/db/schema";
 import { scoreCandidate } from "./score";
 
-async function getConfig(supabase: SupabaseClient, key: string): Promise<string> {
-  const { data, error } = await supabase.from("app_config").select("value").eq("key", key).single();
-  if (error) throw new Error(`Missing app_config value for "${key}": ${error.message}`);
-  return data.value as string;
+async function getConfig(key: string): Promise<string> {
+  const [row] = await db.select({ value: appConfig.value }).from(appConfig).where(eq(appConfig.key, key));
+  if (!row) throw new Error(`Missing app_config value for "${key}"`);
+  return row.value;
 }
 
 /** Scores one candidate row and writes the result to `scores`. */
-export async function runScoreForCandidate(supabase: SupabaseClient, candidateId: string) {
-  const { data: candidate, error } = await supabase
-    .from("candidates")
-    .select("id, clean_text, role_target")
-    .eq("id", candidateId)
-    .single();
-  if (error) throw error;
-  if (candidate.role_target === "unclear") {
+export async function runScoreForCandidate(candidateId: string) {
+  const [candidate] = await db
+    .select({ id: candidates.id, cleanText: candidates.cleanText, roleTarget: candidates.roleTarget })
+    .from(candidates)
+    .where(eq(candidates.id, candidateId));
+  if (!candidate) throw new Error("Candidate not found");
+  if (candidate.roleTarget === "unclear") {
     throw new Error("Cannot score a candidate tagged 'unclear' — assign a role first.");
   }
 
   const [rubricText, pmJD, spmJD] = await Promise.all([
-    getConfig(supabase, "rubric"),
-    getConfig(supabase, "jd_pm"),
-    getConfig(supabase, "jd_spm"),
+    getConfig("rubric"),
+    getConfig("jd_pm"),
+    getConfig("jd_spm"),
   ]);
 
-  const jdText = candidate.role_target === "PM" ? pmJD : spmJD;
+  const jdText = candidate.roleTarget === "PM" ? pmJD : spmJD;
 
   const result = await scoreCandidate({
-    cleanText: candidate.clean_text,
+    cleanText: candidate.cleanText,
     jdText,
-    roleLabel: candidate.role_target,
+    roleLabel: candidate.roleTarget,
     rubricText,
   });
 
-  const { error: upsertErr } = await supabase.from("scores").upsert(
-    {
-      candidate_id: candidateId,
-      criterion_a: result.a.score,
-      criterion_b: result.b.score,
-      criterion_c: result.c.score,
-      criterion_d: result.d.score,
-      criterion_e: result.e.score,
-      criterion_f: result.f.score,
+  const evidence = { a: result.a.evidence, b: result.b.evidence, c: result.c.evidence, d: result.d.evidence, e: result.e.evidence, f: result.f.evidence };
+  const confidenceFlags = {
+    a: result.a.thin_evidence,
+    b: result.b.thin_evidence,
+    c: result.c.thin_evidence,
+    d: result.d.thin_evidence,
+    e: result.e.thin_evidence,
+    f: result.f.thin_evidence,
+  };
+
+  await db
+    .insert(scores)
+    .values({
+      candidateId,
+      criterionA: result.a.score,
+      criterionB: result.b.score,
+      criterionC: result.c.score,
+      criterionD: result.d.score,
+      criterionE: result.e.score,
+      criterionF: result.f.score,
       total: result.total,
-      gate_triggered: result.gate_triggered,
+      gateTriggered: result.gate_triggered,
       band: result.band,
       rationale: result.rationale,
-      evidence: {
-        a: result.a.evidence,
-        b: result.b.evidence,
-        c: result.c.evidence,
-        d: result.d.evidence,
-        e: result.e.evidence,
-        f: result.f.evidence,
+      evidence,
+      confidenceFlags,
+      probeQuestions: result.probe_questions,
+      modelVersion: result.model_version,
+    })
+    .onConflictDoUpdate({
+      target: scores.candidateId,
+      set: {
+        criterionA: result.a.score,
+        criterionB: result.b.score,
+        criterionC: result.c.score,
+        criterionD: result.d.score,
+        criterionE: result.e.score,
+        criterionF: result.f.score,
+        total: result.total,
+        gateTriggered: result.gate_triggered,
+        band: result.band,
+        rationale: result.rationale,
+        evidence,
+        confidenceFlags,
+        probeQuestions: result.probe_questions,
+        modelVersion: result.model_version,
+        scoredAt: new Date(),
       },
-      confidence_flags: {
-        a: result.a.thin_evidence,
-        b: result.b.thin_evidence,
-        c: result.c.thin_evidence,
-        d: result.d.thin_evidence,
-        e: result.e.thin_evidence,
-        f: result.f.thin_evidence,
-      },
-      probe_questions: result.probe_questions,
-      model_version: result.model_version,
-    },
-    { onConflict: "candidate_id" }
-  );
-  if (upsertErr) throw upsertErr;
+    });
 
-  await supabase.from("candidates").update({ status: "scored" }).eq("id", candidateId);
+  await db.update(candidates).set({ status: "scored" }).where(eq(candidates.id, candidateId));
 
   return result;
 }

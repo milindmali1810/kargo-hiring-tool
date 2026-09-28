@@ -1,6 +1,10 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { eq, desc } from "drizzle-orm";
+import { db } from "@/lib/db/client";
+import { candidates, scores, emailDrafts } from "@/lib/db/schema";
 import { CandidateActions } from "./CandidateActions";
+
+export const dynamic = "force-dynamic";
 
 const CRITERIA: { key: "a" | "b" | "c" | "d" | "e" | "f"; label: string; max: number }[] = [
   { key: "a", label: "Operational domain fluency", max: 25 },
@@ -11,30 +15,40 @@ const CRITERIA: { key: "a" | "b" | "c" | "d" | "e" | "f"; label: string; max: nu
   { key: "f", label: "Role-scope fit", max: 10 },
 ];
 
+const CRITERION_COLUMN = {
+  a: "criterionA",
+  b: "criterionB",
+  c: "criterionC",
+  d: "criterionD",
+  e: "criterionE",
+  f: "criterionF",
+} as const;
+
 export default async function CandidatePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createClient();
 
-  const [{ data: candidate }, { data: score }, { data: drafts }] = await Promise.all([
-    supabase.from("candidates").select("*").eq("id", id).single(),
-    supabase.from("scores").select("*").eq("candidate_id", id).maybeSingle(),
-    supabase.from("email_drafts").select("*").eq("candidate_id", id).order("created_at", { ascending: false }),
-  ]);
-
+  const [candidate] = await db.select().from(candidates).where(eq(candidates.id, id));
   if (!candidate) notFound();
+
+  const [score] = await db.select().from(scores).where(eq(scores.candidateId, id));
+  const drafts = await db.select().from(emailDrafts).where(eq(emailDrafts.candidateId, id)).orderBy(desc(emailDrafts.createdAt));
+
+  const evidence = (score?.evidence ?? {}) as Record<string, string>;
+  const confidenceFlags = (score?.confidenceFlags ?? {}) as Record<string, boolean>;
+  const probeQuestions = (score?.probeQuestions ?? []) as string[];
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">{candidate.name ?? candidate.source_filename}</h1>
+        <h1 className="text-xl font-semibold text-slate-900">{candidate.name ?? candidate.sourceFilename}</h1>
         <p className="text-sm text-slate-500">
-          {candidate.email ?? "no email"} · {candidate.role_target} · {candidate.source_filename}
+          {candidate.email ?? "no email"} · {candidate.roleTarget} · {candidate.sourceFilename}
         </p>
-        {candidate.is_duplicate_of && (
+        {candidate.isDuplicateOf && (
           <p className="mt-1 text-sm text-rose-700">Flagged as a duplicate of another candidate in the system.</p>
         )}
-        {candidate.interview_notes && (
-          <p className="mt-2 rounded bg-slate-100 p-2 text-sm text-slate-700">{candidate.interview_notes}</p>
+        {candidate.interviewNotes && (
+          <p className="mt-2 rounded bg-slate-100 p-2 text-sm text-slate-700">{candidate.interviewNotes}</p>
         )}
       </div>
 
@@ -45,7 +59,7 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
               <span className="text-lg font-semibold">{score.total}/100</span>
               <span className="rounded px-2 py-1 text-xs font-medium capitalize bg-slate-100">
                 {score.band}
-                {score.gate_triggered ? " (gated)" : ""}
+                {score.gateTriggered ? " (gated)" : ""}
               </span>
             </div>
             <p className="mb-4 text-sm text-slate-700">{score.rationale}</p>
@@ -57,17 +71,17 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
                       ({c.key}) {c.label}
                     </span>
                     <span className="text-slate-600">
-                      {score[`criterion_${c.key}`]}/{c.max}
-                      {score.confidence_flags?.[c.key] && (
+                      {score[CRITERION_COLUMN[c.key]]}/{c.max}
+                      {confidenceFlags[c.key] && (
                         <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">
                           thin evidence
                         </span>
                       )}
                     </span>
                   </div>
-                  {score.evidence?.[c.key] && (
+                  {evidence[c.key] && (
                     <blockquote className="mt-1 border-l-2 border-slate-200 pl-3 text-sm italic text-slate-600">
-                      &ldquo;{score.evidence[c.key]}&rdquo;
+                      &ldquo;{evidence[c.key]}&rdquo;
                     </blockquote>
                   )}
                 </div>
@@ -78,7 +92,7 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
           <div className="rounded-lg border border-slate-200 bg-white p-4">
             <h2 className="mb-2 text-sm font-semibold text-slate-900">Probe questions</h2>
             <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
-              {(score.probe_questions ?? []).map((q: string, i: number) => (
+              {probeQuestions.map((q, i) => (
                 <li key={i}>{q}</li>
               ))}
             </ul>
@@ -90,7 +104,12 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
-      <CandidateActions candidateId={id} hasScore={!!score} suggestedBand={score?.band ?? null} drafts={drafts ?? []} />
+      <CandidateActions
+        candidateId={id}
+        hasScore={!!score}
+        suggestedBand={score?.band ?? null}
+        drafts={drafts.map((d) => ({ id: d.id, kind: d.kind, subject: d.subject, body: d.body, status: d.status }))}
+      />
     </div>
   );
 }

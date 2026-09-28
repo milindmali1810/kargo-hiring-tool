@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { eq } from "drizzle-orm";
+import { getSession } from "@/lib/auth";
+import { db } from "@/lib/db/client";
+import { candidates, appConfig } from "@/lib/db/schema";
 import { ingestCandidate } from "@/lib/pipeline/ingest";
 
 /**
@@ -8,11 +11,8 @@ import { ingestCandidate } from "@/lib/pipeline/ingest";
  * to add a candidate any time (e.g. right after taking an interview).
  */
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const form = await req.formData();
   const file = form.get("file");
@@ -24,26 +24,14 @@ export async function POST(req: NextRequest) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const storagePath = `${crypto.randomUUID()}-${file.name}`;
 
-  const { error: uploadErr } = await supabase.storage.from("resumes").upload(storagePath, buffer, {
-    contentType: file.type,
-  });
-  if (uploadErr) {
-    return NextResponse.json({ error: `Upload failed: ${uploadErr.message}` }, { status: 500 });
-  }
-
-  const [{ data: pmJDRow }, { data: spmJDRow }] = await Promise.all([
-    supabase.from("app_config").select("value").eq("key", "jd_pm").single(),
-    supabase.from("app_config").select("value").eq("key", "jd_spm").single(),
-  ]);
+  const [pmJDRow] = await db.select({ value: appConfig.value }).from(appConfig).where(eq(appConfig.key, "jd_pm"));
+  const [spmJDRow] = await db.select({ value: appConfig.value }).from(appConfig).where(eq(appConfig.key, "jd_spm"));
 
   try {
     const result = await ingestCandidate({
-      supabase,
       file: buffer,
       filename: file.name,
-      storagePath,
       filenameRoleTag: roleField === "PM" || roleField === "SPM" ? roleField : null,
       pmJD: pmJDRow?.value ?? "",
       spmJD: spmJDRow?.value ?? "",
@@ -51,10 +39,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (typeof interviewNotes === "string" && interviewNotes.trim()) {
-      await supabase
-        .from("candidates")
-        .update({ interview_notes: interviewNotes })
-        .eq("id", result.candidateId);
+      await db.update(candidates).set({ interviewNotes }).where(eq(candidates.id, result.candidateId));
     }
 
     return NextResponse.json(result, { status: 201 });

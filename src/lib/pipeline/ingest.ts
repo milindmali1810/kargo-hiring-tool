@@ -1,14 +1,13 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { db } from "@/lib/db/client";
+import { candidates } from "@/lib/db/schema";
 import { extractText } from "./extractText";
 import { normalize } from "./normalize";
 import { contentHash, findDuplicate } from "./dedupe";
 import { tagRole } from "./tagRole";
 
 export interface IngestOptions {
-  supabase: SupabaseClient;
   file: Buffer;
   filename: string;
-  storagePath: string | null;
   /** Filename-derived role tag (e.g. from a `pm_`/`spm_` prefix), if one exists. */
   filenameRoleTag: "PM" | "SPM" | null;
   pmJD: string;
@@ -34,14 +33,13 @@ export async function ingestCandidate(opts: IngestOptions): Promise<IngestResult
   const normalized = await normalize(rawText);
   const hash = contentHash(normalized.clean_text);
 
-  const { data: existing, error: existingErr } = await opts.supabase
-    .from("candidates")
-    .select("id, name, email, phone, content_hash");
-  if (existingErr) throw existingErr;
+  const existing = await db
+    .select({ id: candidates.id, name: candidates.name, email: candidates.email, phone: candidates.phone, content_hash: candidates.contentHash })
+    .from(candidates);
 
   const duplicateOfId = findDuplicate(
     { name: normalized.name, email: normalized.email, phone: normalized.phone, contentHash: hash },
-    existing ?? []
+    existing
   );
 
   let roleTarget: "PM" | "SPM" | "unclear";
@@ -54,29 +52,26 @@ export async function ingestCandidate(opts: IngestOptions): Promise<IngestResult
     taggingRationale = tagged.reason;
   }
 
-  const { data: inserted, error: insertErr } = await opts.supabase
-    .from("candidates")
-    .insert({
-      source_filename: opts.filename,
-      storage_path: opts.storagePath,
+  const [inserted] = await db
+    .insert(candidates)
+    .values({
+      sourceFilename: opts.filename,
       name: normalized.name,
       email: normalized.email,
       phone: normalized.phone,
-      role_target: roleTarget,
-      tagging_rationale: taggingRationale,
-      raw_text: rawText,
-      clean_text: normalized.clean_text,
-      roles_held: normalized.roles_held,
-      years_experience: normalized.years_experience,
-      achievement_bullets: normalized.achievement_bullets,
-      content_hash: hash,
-      is_duplicate_of: duplicateOfId,
+      roleTarget,
+      taggingRationale,
+      rawText,
+      cleanText: normalized.clean_text,
+      rolesHeld: normalized.roles_held,
+      yearsExperience: normalized.years_experience?.toString(),
+      achievementBullets: normalized.achievement_bullets,
+      contentHash: hash,
+      isDuplicateOf: duplicateOfId,
       status: "pending_score",
-      added_via: opts.addedVia,
+      addedVia: opts.addedVia,
     })
-    .select("id")
-    .single();
-  if (insertErr) throw insertErr;
+    .returning({ id: candidates.id });
 
   return {
     candidateId: inserted.id,
