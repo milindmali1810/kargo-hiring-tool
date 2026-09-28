@@ -1,28 +1,74 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Playful-but-professional palette: indigo primary, orange accent, soft
+     indigo-tinted background — pulled from the "Educational App" palette
+     profile, which pairs friendliness with the readability an internal
+     hiring tool still needs. Band colors (advance/hold/decline) stay on
+     emerald/amber/rose since that mapping is already semantically load-bearing. */
+  --background: #f5f6fd;
+  --foreground: #1e1b4b;
+
+  --color-primary: #4f46e5;
+  --color-primary-dark: #4338ca;
+  --color-on-primary: #ffffff;
+  --color-accent: #ea580c;
+  --color-accent-dark: #c2410c;
+  --color-on-accent: #ffffff;
+
+  --color-card: #ffffff;
+  --color-card-foreground: #1e1b4b;
+  --color-muted: #eef0fb;
+  --color-muted-foreground: #5b5f7a;
+  --color-border: #dfe1f3;
+  --color-ring: #4f46e5;
+
   color-scheme: light;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-heading), sans-serif;
+  --font-body: var(--font-body), sans-serif;
 }
 
 /*
- * This app is designed light-mode only (white cards, dark slate text) — it
- * does not have a dark palette, so it must not follow the OS dark-mode
- * preference. Without this, browsers with a dark OS theme render the black
- * default background from below while the rest of the UI stays styled for
- * white, making most text unreadable.
+ * This app is designed light-mode only — it does not have a dark palette, so
+ * it must not follow the OS dark-mode preference. Without this, browsers
+ * with a dark OS theme render a black default background while the rest of
+ * the UI stays styled for white, making most text unreadable.
  */
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(1200px 480px at 10% -10%, rgba(79, 70, 229, 0.08), transparent),
+    radial-gradient(900px 420px at 100% 0%, rgba(234, 88, 12, 0.06), transparent),
+    var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-heading), sans-serif;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.35s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up {
+    animation: none;
+  }
 }

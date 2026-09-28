@@ -67,13 +67,13 @@ export function CandidateActions({
 
   return (
     <div className="space-y-4">
-      {error && <p className="rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+      {error && <p className="rounded-lg bg-rose-50 p-2 text-sm text-rose-700">{error}</p>}
 
       {!hasScore ? (
         <button
           onClick={() => runAction("score", () => fetch(`/api/candidates/${candidateId}/score`, { method: "POST" }))}
           disabled={loading === "score"}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="cursor-pointer rounded-full bg-gradient-to-r from-indigo-600 to-indigo-500 px-5 py-2.5 text-sm font-medium text-white shadow-sm shadow-indigo-600/20 transition-all duration-150 hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading === "score" ? "Scoring..." : "Score this candidate"}
         </button>
@@ -90,7 +90,7 @@ export function CandidateActions({
               )
             }
             disabled={loading === "draft-invite"}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
+            className="cursor-pointer rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition-colors duration-150 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Draft interview invite
           </button>
@@ -105,7 +105,7 @@ export function CandidateActions({
               )
             }
             disabled={loading === "draft-decline"}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-800 disabled:opacity-50"
+            className="cursor-pointer rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition-colors duration-150 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Draft decline
           </button>
@@ -115,11 +115,13 @@ export function CandidateActions({
       {drafts.length > 0 && (
         <div className="space-y-4">
           {drafts.map((d) => (
-            <div key={d.id} className="rounded-lg border border-slate-200 bg-white p-4">
+            <div key={d.id} className="rounded-2xl border border-[var(--color-border)] bg-white p-4 shadow-sm">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-medium uppercase text-slate-500">{d.kind}</span>
+                <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-indigo-600">
+                  {d.kind}
+                </span>
                 <span
-                  className={`rounded px-2 py-0.5 text-xs font-medium ${
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
                     d.status === "sent" ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"
                   }`}
                 >
@@ -127,13 +129,13 @@ export function CandidateActions({
                 </span>
               </div>
               <input
-                className="mb-2 w-full rounded border border-slate-200 px-2 py-1 text-sm font-medium"
+                className="mb-2 w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium outline-none transition-shadow focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
                 value={edits[d.id]?.subject ?? d.subject}
                 disabled={d.status === "sent"}
                 onChange={(e) => setEdits((prev) => ({ ...prev, [d.id]: { ...prev[d.id], subject: e.target.value } }))}
               />
               <textarea
-                className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
+                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none transition-shadow focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
                 rows={5}
                 disabled={d.status === "sent"}
                 value={edits[d.id]?.body ?? d.body}
@@ -144,14 +146,14 @@ export function CandidateActions({
                   <button
                     onClick={() => saveDraftEdits(d)}
                     disabled={loading === `save-${d.id}`}
-                    className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-800"
+                    className="cursor-pointer rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Save edits
                   </button>
                   <button
                     onClick={() => sendDraft(d)}
                     disabled={loading === `send-${d.id}`}
-                    className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white"
+                    className="cursor-pointer rounded-full bg-gradient-to-r from-orange-600 to-orange-500 px-3 py-1.5 text-xs font-medium text-white shadow-sm shadow-orange-600/20 transition-all hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {loading === `send-${d.id}` ? "Sending..." : "Send"}
                   </button>

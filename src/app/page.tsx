@@ -6,10 +6,26 @@ import { eq } from "drizzle-orm";
 export const dynamic = "force-dynamic";
 
 const BAND_ORDER: Record<string, number> = { advance: 0, hold: 1, decline: 2 };
-const BAND_STYLES: Record<string, string> = {
-  advance: "bg-emerald-100 text-emerald-800",
-  hold: "bg-amber-100 text-amber-800",
-  decline: "bg-slate-200 text-slate-700",
+
+const BAND_META: Record<string, { badge: string; bar: string; ring: string; label: string }> = {
+  advance: {
+    badge: "bg-emerald-100 text-emerald-700",
+    bar: "bg-emerald-400",
+    ring: "ring-emerald-200",
+    label: "Advance",
+  },
+  hold: {
+    badge: "bg-amber-100 text-amber-700",
+    bar: "bg-amber-400",
+    ring: "ring-amber-200",
+    label: "Hold",
+  },
+  decline: {
+    badge: "bg-rose-100 text-rose-700",
+    bar: "bg-rose-300",
+    ring: "ring-rose-100",
+    label: "Decline",
+  },
 };
 
 export default async function DashboardPage() {
@@ -36,52 +52,87 @@ export default async function DashboardPage() {
     });
   const pending = rows.filter((r) => r.band === null);
 
+  const counts = {
+    advance: scored.filter((c) => c.band === "advance").length,
+    hold: scored.filter((c) => c.band === "hold").length,
+    decline: scored.filter((c) => c.band === "decline").length,
+  };
+
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        <strong>This ranking is a documented hypothesis, not a validated predictor.</strong> It comes from
-        just 8 past hires — only 2 of them actually hired as Product Manager — scored with a gate rule
-        calibrated to match Arjun&apos;s own past judgments, not a pure additive model. A low score is a
-        signal to probe in interview, not an automatic disqualifier.
+      <div className="animate-fade-in-up overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-600 via-indigo-500 to-orange-400 p-5 text-sm text-white shadow-lg shadow-indigo-600/15">
+        <strong className="font-heading text-base">This ranking is a documented hypothesis, not a validated predictor.</strong>
+        <p className="mt-1 text-indigo-50">
+          It comes from just 8 past hires — only 2 of them actually hired as Product Manager — scored
+          with a gate rule calibrated to match Arjun&apos;s own past judgments, not a pure additive model.
+          A low score is a signal to probe in interview, not an automatic disqualifier.
+        </p>
       </div>
 
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-slate-900">Shortlist ({scored.length} scored)</h1>
-        <Link href="/candidates/new" className="text-sm font-medium text-slate-900 underline">
+        <div>
+          <h1 className="font-heading text-xl font-semibold text-slate-900">Shortlist</h1>
+          <p className="text-sm text-slate-500">{scored.length} scored candidates</p>
+        </div>
+        <Link
+          href="/candidates/new"
+          className="cursor-pointer rounded-full bg-gradient-to-r from-indigo-600 to-indigo-500 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-600/20 transition-all duration-150 hover:shadow-md active:scale-[0.98]"
+        >
           + Add candidate
         </Link>
       </div>
 
-      <div className="space-y-3">
-        {scored.map((c) => (
-          <Link
-            key={c.id}
-            href={`/candidates/${c.id}`}
-            className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-400"
+      <div className="grid grid-cols-3 gap-3">
+        {(["advance", "hold", "decline"] as const).map((band) => (
+          <div
+            key={band}
+            className={`rounded-xl border border-[var(--color-border)] bg-white p-4 shadow-sm ring-1 ${BAND_META[band].ring}`}
           >
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-slate-900">{c.name ?? c.sourceFilename}</span>
-                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{c.roleTarget}</span>
-                {c.isDuplicateOf && (
-                  <span className="rounded bg-rose-100 px-1.5 py-0.5 text-xs text-rose-700">duplicate</span>
-                )}
-              </div>
-              <div className="text-xs text-slate-500">{c.sourceFilename}</div>
+            <div className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${BAND_META[band].badge}`}>
+              {BAND_META[band].label}
             </div>
-            <div className="flex items-center gap-3">
-              {c.gateTriggered && (
-                <span className="text-xs text-slate-500" title="Gated: (a)+(b) < 15/45">
-                  gated
-                </span>
-              )}
-              <span className="text-sm font-semibold text-slate-900">{c.total}/100</span>
-              <span className={`rounded px-2 py-1 text-xs font-medium capitalize ${BAND_STYLES[c.band!]}`}>
-                {c.band}
-              </span>
-            </div>
-          </Link>
+            <div className="mt-2 font-heading text-2xl font-semibold text-slate-900">{counts[band]}</div>
+          </div>
         ))}
+      </div>
+
+      <div className="space-y-3">
+        {scored.map((c, i) => {
+          const meta = BAND_META[c.band!];
+          return (
+            <Link
+              key={c.id}
+              href={`/candidates/${c.id}`}
+              style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}
+              className="animate-fade-in-up group flex items-center gap-4 overflow-hidden rounded-xl border border-[var(--color-border)] bg-white p-4 shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <span className={`h-10 w-1.5 shrink-0 rounded-full ${meta.bar}`} />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-slate-900 group-hover:text-indigo-700">
+                    {c.name ?? c.sourceFilename}
+                  </span>
+                  <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                    {c.roleTarget}
+                  </span>
+                  {c.isDuplicateOf && (
+                    <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs text-rose-700">duplicate</span>
+                  )}
+                </div>
+                <div className="truncate text-xs text-slate-500">{c.sourceFilename}</div>
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                {c.gateTriggered && (
+                  <span className="text-xs text-slate-400" title="Gated: (a)+(b) < 15/45">
+                    gated
+                  </span>
+                )}
+                <span className="font-heading text-sm font-semibold text-slate-900">{c.total}/100</span>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${meta.badge}`}>{meta.label}</span>
+              </div>
+            </Link>
+          );
+        })}
       </div>
 
       {pending.length > 0 && (
@@ -92,7 +143,7 @@ export default async function DashboardPage() {
               <Link
                 key={c.id}
                 href={`/candidates/${c.id}`}
-                className="block rounded-lg border border-dashed border-slate-300 bg-white p-3 text-sm text-slate-600 hover:border-slate-400"
+                className="block rounded-xl border border-dashed border-slate-300 bg-white/60 p-3 text-sm text-slate-600 transition-colors duration-150 hover:border-indigo-300 hover:bg-white"
               >
                 {c.name ?? c.sourceFilename} — {c.roleTarget}
               </Link>

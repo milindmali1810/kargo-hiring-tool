@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq, desc } from "drizzle-orm";
 import { db } from "@/lib/db/client";
@@ -24,6 +25,12 @@ const CRITERION_COLUMN = {
   f: "criterionF",
 } as const;
 
+const BAND_META: Record<string, { badge: string; bar: string; gradient: string }> = {
+  advance: { badge: "bg-emerald-100 text-emerald-700", bar: "bg-emerald-400", gradient: "from-emerald-500 to-emerald-400" },
+  hold: { badge: "bg-amber-100 text-amber-700", bar: "bg-amber-400", gradient: "from-amber-500 to-amber-400" },
+  decline: { badge: "bg-rose-100 text-rose-700", bar: "bg-rose-300", gradient: "from-rose-400 to-rose-300" },
+};
+
 export default async function CandidatePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
@@ -36,70 +43,99 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
   const evidence = (score?.evidence ?? {}) as Record<string, string>;
   const confidenceFlags = (score?.confidenceFlags ?? {}) as Record<string, boolean>;
   const probeQuestions = (score?.probeQuestions ?? []) as string[];
+  const meta = score ? BAND_META[score.band] : null;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">{candidate.name ?? candidate.sourceFilename}</h1>
-        <p className="text-sm text-slate-500">
-          {candidate.email ?? "no email"} · {candidate.roleTarget} · {candidate.sourceFilename}
-        </p>
-        {candidate.isDuplicateOf && (
-          <p className="mt-1 text-sm text-rose-700">Flagged as a duplicate of another candidate in the system.</p>
-        )}
-        {candidate.interviewNotes && (
-          <p className="mt-2 rounded bg-slate-100 p-2 text-sm text-slate-700">{candidate.interviewNotes}</p>
+    <div className="animate-fade-in-up space-y-6">
+      <Link href="/" className="inline-flex items-center gap-1 text-sm text-slate-500 transition-colors hover:text-indigo-600">
+        ← Back to shortlist
+      </Link>
+
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-xl font-semibold text-slate-900">{candidate.name ?? candidate.sourceFilename}</h1>
+          <p className="text-sm text-slate-500">
+            {candidate.email ?? "no email"} · <span className="font-medium text-indigo-600">{candidate.roleTarget}</span> ·{" "}
+            {candidate.sourceFilename}
+          </p>
+          {candidate.isDuplicateOf && (
+            <p className="mt-1 text-sm text-rose-700">Flagged as a duplicate of another candidate in the system.</p>
+          )}
+          {candidate.interviewNotes && (
+            <p className="mt-2 rounded-lg bg-indigo-50 p-2 text-sm text-indigo-900">{candidate.interviewNotes}</p>
+          )}
+        </div>
+        {score && (
+          <div
+            className={`flex shrink-0 flex-col items-center justify-center rounded-2xl bg-gradient-to-br ${meta!.gradient} px-6 py-3 text-white shadow-md`}
+          >
+            <span className="font-heading text-2xl font-bold leading-none">{score.total}</span>
+            <span className="text-[10px] uppercase tracking-wide text-white/80">/ 100</span>
+          </div>
         )}
       </div>
 
       {score ? (
         <>
-          <div className="rounded-lg border border-slate-200 bg-white p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-lg font-semibold">{score.total}/100</span>
-              <span className="rounded px-2 py-1 text-xs font-medium capitalize bg-slate-100">
+          <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-[var(--color-border)] bg-slate-50/60 px-5 py-3">
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${meta!.badge}`}>
                 {score.band}
-                {score.gateTriggered ? " (gated)" : ""}
+                {score.gateTriggered ? " · gated" : ""}
               </span>
+              <span className="text-xs text-slate-400">Rubric v1</span>
             </div>
-            <p className="mb-4 text-sm text-slate-700">{score.rationale}</p>
-            <div className="space-y-3">
-              {CRITERIA.map((c) => (
-                <div key={c.key} className="border-t border-slate-100 pt-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-slate-800">
-                      ({c.key}) {c.label}
-                    </span>
-                    <span className="text-slate-600">
-                      {score[CRITERION_COLUMN[c.key]]}/{c.max}
-                      {confidenceFlags[c.key] && (
-                        <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">
-                          thin evidence
-                        </span>
-                      )}
-                    </span>
+            <div className="px-5 pt-4 pb-1 text-sm text-slate-700">{score.rationale}</div>
+            <div className="divide-y divide-[var(--color-border)]">
+              {CRITERIA.map((c) => {
+                const value = score[CRITERION_COLUMN[c.key]] as number;
+                const pct = Math.round((value / c.max) * 100);
+                return (
+                  <div key={c.key} className="px-5 py-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium text-slate-800">
+                        <span className="mr-1 text-indigo-500">({c.key})</span> {c.label}
+                      </span>
+                      <span className="text-slate-600">
+                        {value}/{c.max}
+                        {confidenceFlags[c.key] && (
+                          <span className="ml-2 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">
+                            thin evidence
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className={`h-full rounded-full ${meta!.bar} transition-all duration-500`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    {evidence[c.key] && (
+                      <blockquote className="mt-2 rounded-lg border-l-2 border-indigo-200 bg-indigo-50/50 py-1.5 pl-3 text-sm italic text-slate-600">
+                        &ldquo;{evidence[c.key]}&rdquo;
+                      </blockquote>
+                    )}
                   </div>
-                  {evidence[c.key] && (
-                    <blockquote className="mt-1 border-l-2 border-slate-200 pl-3 text-sm italic text-slate-600">
-                      &ldquo;{evidence[c.key]}&rdquo;
-                    </blockquote>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-white p-4">
-            <h2 className="mb-2 text-sm font-semibold text-slate-900">Probe questions</h2>
-            <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
+          <div className="rounded-2xl border border-[var(--color-border)] bg-white p-5 shadow-sm">
+            <h2 className="mb-3 font-heading text-sm font-semibold text-slate-900">Probe questions</h2>
+            <ul className="space-y-2">
               {probeQuestions.map((q, i) => (
-                <li key={i}>{q}</li>
+                <li key={i} className="flex gap-2 rounded-lg bg-orange-50/70 p-2.5 text-sm text-slate-700">
+                  <span className="font-heading font-semibold text-orange-500">{i + 1}.</span>
+                  {q}
+                </li>
               ))}
             </ul>
           </div>
         </>
       ) : (
-        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-600">
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 p-5 text-sm text-slate-600">
           Not scored yet.
         </div>
       )}
