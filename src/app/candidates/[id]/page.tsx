@@ -64,6 +64,11 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
           {candidate.interviewNotes && (
             <p className="mt-2 rounded-lg bg-indigo-50 p-2 text-sm text-indigo-900">{candidate.interviewNotes}</p>
           )}
+          {candidate.roleTarget === "unclear" && candidate.taggingRationale && (
+            <p className="mt-2 rounded-lg bg-amber-50 p-2 text-sm text-amber-900">
+              <strong>Why tagged unclear:</strong> {candidate.taggingRationale}
+            </p>
+          )}
         </div>
         {score && (
           <div
@@ -143,6 +148,7 @@ export default async function CandidatePage({ params }: { params: Promise<{ id: 
       <CandidateActions
         candidateId={id}
         hasScore={!!score}
+        roleTarget={candidate.roleTarget}
         suggestedBand={score?.band ?? null}
         drafts={drafts.map((d) => ({ id: d.id, kind: d.kind, subject: d.subject, body: d.body, status: d.status }))}
       />

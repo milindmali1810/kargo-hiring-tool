@@ -143,9 +143,18 @@ export default async function DashboardPage() {
               <Link
                 key={c.id}
                 href={`/candidates/${c.id}`}
-                className="block rounded-xl border border-dashed border-slate-300 bg-white/60 p-3 text-sm text-slate-600 transition-colors duration-150 hover:border-indigo-300 hover:bg-white"
+                className="flex items-center justify-between rounded-xl border border-dashed border-slate-300 bg-white/60 p-3 text-sm text-slate-600 transition-colors duration-150 hover:border-indigo-300 hover:bg-white"
               >
-                {c.name ?? c.sourceFilename} — {c.roleTarget}
+                <span>{c.name ?? c.sourceFilename}</span>
+                {c.roleTarget === "unclear" ? (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                    needs role
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                    {c.roleTarget}
+                  </span>
+                )}
               </Link>
             ))}
           </div>

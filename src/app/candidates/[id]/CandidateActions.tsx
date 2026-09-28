@@ -14,19 +14,32 @@ type Draft = {
 export function CandidateActions({
   candidateId,
   hasScore,
+  roleTarget,
   drafts,
 }: {
   candidateId: string;
   hasScore: boolean;
+  roleTarget: "PM" | "SPM" | "unclear";
   suggestedBand: string | null;
   drafts: Draft[];
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingRole, setPendingRole] = useState<"PM" | "SPM">("PM");
   const [edits, setEdits] = useState<Record<string, { subject: string; body: string }>>(
     Object.fromEntries(drafts.map((d) => [d.id, { subject: d.subject, body: d.body }]))
   );
+
+  async function assignRole() {
+    await runAction("assign-role", () =>
+      fetch(`/api/candidates/${candidateId}/role`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: pendingRole }),
+      })
+    );
+  }
 
   async function runAction(key: string, fn: () => Promise<Response>) {
     setLoading(key);
@@ -69,7 +82,28 @@ export function CandidateActions({
     <div className="space-y-4">
       {error && <p className="rounded-lg bg-rose-50 p-2 text-sm text-rose-700">{error}</p>}
 
-      {!hasScore ? (
+      {roleTarget === "unclear" ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <span className="text-sm text-amber-900">
+            No clear PM/SPM fit was tagged — assign a role before scoring:
+          </span>
+          <select
+            value={pendingRole}
+            onChange={(e) => setPendingRole(e.target.value as "PM" | "SPM")}
+            className="cursor-pointer rounded-full border border-amber-300 bg-white px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-amber-200"
+          >
+            <option value="PM">Product Manager</option>
+            <option value="SPM">Senior Product Manager</option>
+          </select>
+          <button
+            onClick={assignRole}
+            disabled={loading === "assign-role"}
+            className="cursor-pointer rounded-full bg-amber-500 px-4 py-1.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading === "assign-role" ? "Saving..." : "Assign role"}
+          </button>
+        </div>
+      ) : !hasScore ? (
         <button
           onClick={() => runAction("score", () => fetch(`/api/candidates/${candidateId}/score`, { method: "POST" }))}
           disabled={loading === "score"}
