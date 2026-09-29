@@ -121,3 +121,38 @@ export async function scoreCandidate(params: {
 function clamp(value: number, max: number): number {
   return Math.max(0, Math.min(max, Math.round(value)));
 }
+
+/** Rehydrates a `scores` table row (Drizzle select shape) back into a ScoreResult. */
+export function scoreRowToResult(row: {
+  criterionA: number;
+  criterionB: number;
+  criterionC: number;
+  criterionD: number;
+  criterionE: number;
+  criterionF: number;
+  evidence: unknown;
+  confidenceFlags: unknown;
+  rationale: string;
+  probeQuestions: unknown;
+  total: number;
+  gateTriggered: boolean;
+  band: "advance" | "hold" | "decline";
+  modelVersion: string;
+}): ScoreResult {
+  const evidence = row.evidence as Record<string, string>;
+  const confidenceFlags = row.confidenceFlags as Record<string, boolean>;
+  return {
+    a: { score: row.criterionA, evidence: evidence.a, thin_evidence: confidenceFlags.a },
+    b: { score: row.criterionB, evidence: evidence.b, thin_evidence: confidenceFlags.b },
+    c: { score: row.criterionC, evidence: evidence.c, thin_evidence: confidenceFlags.c },
+    d: { score: row.criterionD, evidence: evidence.d, thin_evidence: confidenceFlags.d },
+    e: { score: row.criterionE, evidence: evidence.e, thin_evidence: confidenceFlags.e },
+    f: { score: row.criterionF, evidence: evidence.f, thin_evidence: confidenceFlags.f },
+    rationale: row.rationale,
+    probe_questions: row.probeQuestions as string[],
+    total: row.total,
+    gate_triggered: row.gateTriggered,
+    band: row.band,
+    model_version: row.modelVersion,
+  };
+}

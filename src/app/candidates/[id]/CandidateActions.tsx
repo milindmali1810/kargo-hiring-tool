@@ -27,9 +27,13 @@ export function CandidateActions({
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingRole, setPendingRole] = useState<"PM" | "SPM">("PM");
+  const [confirmingSend, setConfirmingSend] = useState<string | null>(null);
   const [edits, setEdits] = useState<Record<string, { subject: string; body: string }>>(
     Object.fromEntries(drafts.map((d) => [d.id, { subject: d.subject, body: d.body }]))
   );
+
+  const alreadySentInvite = drafts.some((d) => d.kind === "invite" && d.status === "sent");
+  const alreadySentDecline = drafts.some((d) => d.kind === "decline" && d.status === "sent");
 
   async function assignRole() {
     await runAction("assign-role", () =>
@@ -68,7 +72,7 @@ export function CandidateActions({
   }
 
   async function sendDraft(draft: Draft) {
-    if (!confirm(`Send this ${draft.kind} email now? This cannot be undone.`)) return;
+    setConfirmingSend(null);
     await runAction(`send-${draft.id}`, () =>
       fetch(`/api/candidates/${candidateId}/send-email`, {
         method: "POST",
@@ -112,7 +116,7 @@ export function CandidateActions({
           {loading === "score" ? "Scoring..." : "Score this candidate"}
         </button>
       ) : (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() =>
               runAction("draft-invite", () =>
@@ -123,7 +127,8 @@ export function CandidateActions({
                 })
               )
             }
-            disabled={loading === "draft-invite"}
+            disabled={loading === "draft-invite" || alreadySentInvite || alreadySentDecline}
+            title={alreadySentDecline ? "Already declined" : undefined}
             className="cursor-pointer rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition-colors duration-150 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Draft interview invite
@@ -138,11 +143,14 @@ export function CandidateActions({
                 })
               )
             }
-            disabled={loading === "draft-decline"}
+            disabled={loading === "draft-decline" || alreadySentDecline || alreadySentInvite}
+            title={alreadySentInvite ? "Already invited" : undefined}
             className="cursor-pointer rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition-colors duration-150 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Draft decline
           </button>
+          {alreadySentInvite && <span className="text-xs text-emerald-600">Invite already sent ✓</span>}
+          {alreadySentDecline && <span className="text-xs text-slate-500">Decline already sent</span>}
         </div>
       )}
 
@@ -176,7 +184,7 @@ export function CandidateActions({
                 onChange={(e) => setEdits((prev) => ({ ...prev, [d.id]: { ...prev[d.id], body: e.target.value } }))}
               />
               {d.status === "draft" && (
-                <div className="mt-2 flex gap-2">
+                <div className="mt-2 flex items-center gap-2">
                   <button
                     onClick={() => saveDraftEdits(d)}
                     disabled={loading === `save-${d.id}`}
@@ -184,13 +192,31 @@ export function CandidateActions({
                   >
                     Save edits
                   </button>
-                  <button
-                    onClick={() => sendDraft(d)}
-                    disabled={loading === `send-${d.id}`}
-                    className="cursor-pointer rounded-full bg-gradient-to-r from-orange-600 to-orange-500 px-3 py-1.5 text-xs font-medium text-white shadow-sm shadow-orange-600/20 transition-all hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {loading === `send-${d.id}` ? "Sending..." : "Send"}
-                  </button>
+                  {confirmingSend === d.id ? (
+                    <div className="flex items-center gap-1.5 rounded-full bg-slate-50 px-1 py-1">
+                      <span className="pl-1.5 text-xs text-slate-600">Send now?</span>
+                      <button
+                        onClick={() => sendDraft(d)}
+                        className="cursor-pointer rounded-full bg-slate-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-700"
+                      >
+                        Yes, send
+                      </button>
+                      <button
+                        onClick={() => setConfirmingSend(null)}
+                        className="cursor-pointer rounded-full px-2 py-1 text-xs font-medium text-slate-500 hover:text-slate-700"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmingSend(d.id)}
+                      disabled={loading === `send-${d.id}`}
+                      className="cursor-pointer rounded-full bg-gradient-to-r from-orange-600 to-orange-500 px-3 py-1.5 text-xs font-medium text-white shadow-sm shadow-orange-600/20 transition-all hover:shadow-md active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {loading === `send-${d.id}` ? "Sending..." : "Send"}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
